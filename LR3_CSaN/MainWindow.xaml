@@ -3,22 +3,23 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:LR3_CSaN"
         mc:Ignorable="d"
         Title="Чат" 
         Name="mainWindow"
-        Height="768" 
+        MaxHeight="768" 
+        Height="620"
         MinHeight="620"
-        Width="1200" 
+        MaxWidth="1200" 
+        Width="900"
         MinWidth="900"
         WindowStyle="SingleBorderWindow" 
         WindowStartupLocation="CenterScreen"
-        Closing="mainWindow_Closing">
+        Closing="MainWindow_Closing">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="0.08*" />
-            <RowDefinition Height="0.84*" />
-            <RowDefinition Height="0.08*" />
+            <RowDefinition Height="0.82*" />
+            <RowDefinition Height="0.1*" />
         </Grid.RowDefinitions>
         <DockPanel
             Grid.Row="0"
@@ -50,26 +51,17 @@
                     Margin="0,0,8,0"
                     Width="120px"
                     Height="28px"
+                    IsEnabled="False"
                     VerticalAlignment="Center">
                 </Button>
                 <Button
                     Name="btnConnect"
                     Content="Подключиться"
-                    Margin="0,0,8,0"
+                    Margin="0,0,16,0"
                     Width="100px"
                     Height="28px"
                     VerticalAlignment="Center"
-                    Click="btnConnect_Click"
-                    IsEnabled="{Binding ElementName=tbUserName, Path=Text.Length}">
-                </Button>
-                <Button
-                    Name="btnDisconnect"
-                    Content="Выйти"
-                    Width="100px"
-                    Height="28px"
-                    Margin="0,0,16,0" 
-                    VerticalAlignment="Center"
-                    Click="btnDisconnect_Click"
+                    Click="ButtonConnect_Click"
                     IsEnabled="{Binding ElementName=tbUserName, Path=Text.Length}">
                 </Button>
             </DockPanel>
@@ -77,37 +69,47 @@
             <DockPanel />
         </DockPanel>
 
-        <TextBox
-            Name="tbChat"
-            Grid.Row="1"
-            TextWrapping="Wrap"
-            AcceptsReturn="True"
-            VerticalScrollBarVisibility="Auto"
-            IsReadOnly="True">
-        </TextBox>
+        <DockPanel
+            Grid.Row="1">
+            <TextBox
+                Name="tbChat"
+                FontSize="14px"
+                TextWrapping="Wrap"
+                AcceptsReturn="True"
+                Margin="8,8,8,0"
+                VerticalScrollBarVisibility="Auto"
+                IsReadOnly="True"
+                BorderThickness="0px">
+            </TextBox>
+        </DockPanel>
 
         <DockPanel
             Grid.Row="2">
-            <Button
-                Name="btnSend"
-                Content="Отправить"
-                Width="80px"
-                Height="28px"
-                IsEnabled="{Binding ElementName=tbMessage, Path=Text.Length}"
-                DockPanel.Dock="Right"
-                Margin="8,0,16,0" 
-                VerticalAlignment="Center">
-            </Button>
-            
-            <TextBox
-                Name="tbMessage"
-                DockPanel.Dock="Left"
-                TextWrapping="Wrap"
-                AcceptsReturn="True"
-                Margin="16,0,8,0"
-                VerticalScrollBarVisibility="Auto"
-                BorderThickness="0px">
-            </TextBox>
+            <Separator 
+                DockPanel.Dock="Top"/>
+            <DockPanel>
+                <Button
+                    Name="btnSend"
+                    Content="Отправить"
+                    Width="80px"
+                    Height="28px"
+                    IsEnabled="{Binding ElementName=tbMessage, Path=Text.Length}"
+                    DockPanel.Dock="Right"
+                    Margin="8,0,16,0" 
+                    Click="ButtonSend_Click"
+                    VerticalAlignment="Center">
+                </Button>
+
+                <TextBox
+                    Name="tbMessage"
+                    DockPanel.Dock="Left"
+                    TextWrapping="Wrap"
+                    AcceptsReturn="True"
+                    Margin="16,0,8,0"
+                    VerticalScrollBarVisibility="Auto"
+                    BorderThickness="0px">
+                </TextBox>
+            </DockPanel>
         </DockPanel>
     </Grid>
 </Window>

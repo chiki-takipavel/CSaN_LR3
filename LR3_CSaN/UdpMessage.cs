@@ -8,12 +8,12 @@ namespace LR3_CSaN
     {
         const char DELIMITER = '>';
         public string Ip { get; set; }
-        public string UserName { get; set; }
+        public string Username { get; set; }
 
-        public UdpMessage(string ip, string userName)
+        public UdpMessage(string ip, string username)
         {
             Ip = ip;
-            UserName = userName;
+            Username = username;
         }
 
         public UdpMessage(byte[] message)
@@ -23,7 +23,7 @@ namespace LR3_CSaN
 
         public byte[] ToBytes()
         {
-            return Encoding.Unicode.GetBytes(Ip + DELIMITER + UserName);
+            return Encoding.Unicode.GetBytes(Ip + DELIMITER + Username);
         }
 
         private void ParseMessageFromBytes(byte[] message)
@@ -37,8 +37,8 @@ namespace LR3_CSaN
                 Ip += messageString[i];
                 ++i;
             }
-            ++i; //Переходим на первый символ имени
-            UserName = messageString.Substring(i);
+            ++i; // Переходим на первый символ имени
+            Username = messageString.Substring(i);
         }
     }
 }
