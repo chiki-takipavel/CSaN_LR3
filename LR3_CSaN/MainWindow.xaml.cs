@@ -80,7 +80,7 @@ namespace LR3_CSaN
                 string messageChat = "Вы успешно подключились!\r\n";
                 tbChat.AppendText(messageChat);
                 string datetime = DateTime.Now.ToString();
-                History += string.Format("{0} {1} присоединялся к чату\r\n", datetime, Username);
+                History += string.Format("{0} {1} присоединился к чату\r\n", datetime, Username);
             }
             catch
             {
@@ -109,7 +109,7 @@ namespace LR3_CSaN
                     context.Post(delegate (object state)
                     {
                         string datetime = DateTime.Now.ToString();
-                        string messageChat = string.Format("{0} {1} присоединялся к чату\r\n", datetime, receiveMessage.Username);
+                        string messageChat = string.Format("{0} {1} присоединился к чату\r\n", datetime, receiveMessage.Username);
                         tbChat.AppendText(messageChat);
                     }, null);
 
@@ -190,7 +190,7 @@ namespace LR3_CSaN
                                 {
                                     Socket tcpHistorySocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
                                     tcpHistorySocket.Connect(ChatUsers[tcpMessage.Username]);
-                                    TcpMessage tcpHistoryMessage = new TcpMessage(4, "History");
+                                    TcpMessage tcpHistoryMessage = new TcpMessage(4, Username, "History");
                                     tcpHistorySocket.Send(tcpHistoryMessage.ToBytes());
                                     tcpHistorySocket.Shutdown(SocketShutdown.Both);
                                     tcpHistorySocket.Close();
@@ -210,21 +210,12 @@ namespace LR3_CSaN
                         }
                         else if (tcpMessage.Code == 2) // Передали сообщение
                         {
-                            string senderName = "";
                             if (ChatUsers != null)
                             {
-                                foreach (string username in ChatUsers.Keys)
-                                {
-                                    if (GetShortIpAddress(listener.RemoteEndPoint.ToString()) == GetShortIpAddress(ChatUsers[username].ToString()))
-                                    {
-                                        senderName = username;
-                                        break;
-                                    }
-                                }
                                 context.Post(delegate (object state)
                                 {
                                     string datetime = DateTime.Now.ToString();
-                                    string messageChat = string.Format("{0} {1}: {2}\r\n", datetime, senderName, tcpMessage.MessageText);
+                                    string messageChat = string.Format("{0} {1}: {2}\r\n", datetime, tcpMessage.Username, tcpMessage.MessageText);
                                     History += messageChat;
                                     tbChat.AppendText(messageChat);
                                 }, null);
@@ -232,18 +223,9 @@ namespace LR3_CSaN
                         }
                         else if (tcpMessage.Code == 3) // Передали сообщение о выходе пользователя
                         {
-                            string senderName = "";
                             if (ChatUsers != null)
                             {
-                                foreach (string username in ChatUsers.Keys)
-                                {
-                                    if (GetShortIpAddress(listener.RemoteEndPoint.ToString()) == GetShortIpAddress(ChatUsers[username].ToString()))
-                                    {
-                                        senderName = username;
-                                        break;
-                                    }
-                                }
-                                ChatUsers.Remove(senderName);
+                                ChatUsers.Remove(tcpMessage.Username);
                                 context.Post(delegate (object state)
                                 {
                                     string datetime = DateTime.Now.ToString();
@@ -258,9 +240,8 @@ namespace LR3_CSaN
                             try
                             {
                                 Socket tcpHistorySocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-                                IPEndPoint destEndPoint = new IPEndPoint(IPAddress.Parse(GetShortIpAddress(listener.RemoteEndPoint.ToString())), REMOTE_PORT);
-                                tcpHistorySocket.Connect(destEndPoint);
-                                TcpMessage tcpHistoryMessage = new TcpMessage(5, History);
+                                tcpHistorySocket.Connect(ChatUsers[tcpMessage.Username]);
+                                TcpMessage tcpHistoryMessage = new TcpMessage(5, Username, History);
                                 tcpHistorySocket.Send(tcpHistoryMessage.ToBytes());
                                 tcpHistorySocket.Shutdown(SocketShutdown.Both);
                                 tcpHistorySocket.Close();
@@ -296,7 +277,7 @@ namespace LR3_CSaN
         private void SendTcpMessage()
         {
             string userMessage = tbMessage.Text;
-            TcpMessage tcpMessage = new TcpMessage(2, userMessage);
+            TcpMessage tcpMessage = new TcpMessage(2, Username, userMessage);
             string datetime = DateTime.Now.ToString();
             string messageChat = string.Format("{0} Вы: {1}\r\n", datetime, userMessage);
             if (ChatUsers != null)
@@ -374,7 +355,7 @@ namespace LR3_CSaN
                         string message = string.Format("{0} покинул чат\r\n", Username);
                         string exit = string.Format("{0} {1}", datetime, message);
 
-                        TcpMessage tcpMessage = new TcpMessage(3, message);
+                        TcpMessage tcpMessage = new TcpMessage(3, Username, message);
                         History += exit;
                         tbChat.AppendText(exit);
 

@@ -6,12 +6,11 @@
         mc:Ignorable="d"
         Title="Чат" 
         Name="mainWindow"
-        MaxHeight="768" 
         Height="620"
         MinHeight="620"
         MaxWidth="1200" 
         Width="900"
-        MinWidth="900"
+        MinWidth="700"
         WindowStyle="SingleBorderWindow" 
         WindowStartupLocation="CenterScreen"
         Closing="MainWindow_Closing">

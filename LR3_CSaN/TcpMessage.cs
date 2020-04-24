@@ -18,9 +18,10 @@ namespace LR3_CSaN
             Username = username;
         }
 
-        public TcpMessage(int code, string messageText)
+        public TcpMessage(int code, string username, string messageText)
         {
             Code = code;
+            Username = username;
             MessageText = messageText;
         }
 
@@ -45,7 +46,7 @@ namespace LR3_CSaN
             Code = Int32.Parse(messageCode);
             Code -= Int32.Parse("0"); 
 
-            ++i; // Переходим на первый символ сообщения
+            ++i;
             if (Code == 1)
             {
                 Ip = "";
@@ -57,8 +58,15 @@ namespace LR3_CSaN
                 ++i; // Переходим на первый символ имени
                 Username = messageString.Substring(i);
             }
-            else if (Code != 0)
+            else if (Code > 1)
             {
+                Username = "";
+                while (messageString[i] != DELIMITER)
+                {
+                    Username += messageString[i];
+                    ++i;
+                }
+                ++i; // Переходим на первый символ сообщения
                 MessageText = messageString.Substring(i);
             }
         }
@@ -71,7 +79,7 @@ namespace LR3_CSaN
             }
             else
             {
-                return Encoding.Unicode.GetBytes(Code.ToString() + DELIMITER + MessageText);
+                return Encoding.Unicode.GetBytes(Code.ToString() + DELIMITER + Username + DELIMITER + MessageText);
             }
         }
     }
