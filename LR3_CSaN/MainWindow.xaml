@@ -15,6 +15,7 @@
         WindowStyle="SingleBorderWindow" 
         WindowStartupLocation="CenterScreen"
         Closing="MainWindow_Closing">
+    
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="0.08*" />
@@ -45,15 +46,6 @@
 
             <DockPanel
                 DockPanel.Dock="Right">
-                <Button
-                    Name="btnShowHistory"
-                    Content="Показать историю"
-                    Margin="0,0,8,0"
-                    Width="120px"
-                    Height="28px"
-                    IsEnabled="False"
-                    VerticalAlignment="Center">
-                </Button>
                 <Button
                     Name="btnConnect"
                     Content="Подключиться"
@@ -104,6 +96,7 @@
                     Name="tbMessage"
                     DockPanel.Dock="Left"
                     TextWrapping="Wrap"
+                    FontSize="14px"
                     AcceptsReturn="True"
                     Margin="16,0,8,0"
                     VerticalScrollBarVisibility="Auto"

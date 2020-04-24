@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Text;
 
 namespace LR3_CSaN
@@ -8,7 +7,7 @@ namespace LR3_CSaN
     {
         const char DELIMITER = '>';
         public int Code { get; set; } // 1 - передача имени и IP-адреса, 2 - передача сообщения пользователя, 3 - передача сообщения о выходе 
-        public string Ip { get; set; }
+        public string Ip { get; set; } // 4 - запрос истории, 5 - отправка истории
         public string Username { get; set; }
         public string MessageText { get; set; }
 
