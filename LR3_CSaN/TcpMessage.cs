@@ -3,25 +3,24 @@ using System.Text;
 
 namespace LR3_CSaN
 {
-    class TcpMessage
+    public class TcpMessage
     {
-        const char DELIMITER = '>';
-        public int Code { get; set; } // 1 - передача имени и IP-адреса, 2 - передача сообщения пользователя, 3 - передача сообщения о выходе 
-        public string Ip { get; set; } // 4 - запрос истории, 5 - отправка истории
+        const string DELIMITER = "|";
+        public int Code { get; set; }
+        public string Ip { get; set; }
         public string Username { get; set; }
         public string MessageText { get; set; }
 
-        public TcpMessage(string ip, string username)
+        public TcpMessage(int code, string ip, string username)
         {
-            Code = 1;
+            Code = code;
             Ip = ip;
             Username = username;
         }
 
-        public TcpMessage(int code, string username, string messageText)
+        public TcpMessage(int code, string messageText)
         {
             Code = code;
-            Username = username;
             MessageText = messageText;
         }
 
@@ -30,56 +29,37 @@ namespace LR3_CSaN
             ParseMessageFromBytes(message);
         }
 
+        private string[] Explode(string message, string delimiter)
+        {
+            return message.Split(new string[] { delimiter }, StringSplitOptions.None);
+        }
+
         private void ParseMessageFromBytes(byte[] message)
         {
-            string messageString = Encoding.Unicode.GetString(message);
-
-            // Получаем код из сообщения
-            Code = 0;
-            int i = 0;
-            string messageCode = "";
-            while (messageString[i] != DELIMITER)
+            string stringMessage = Encoding.Unicode.GetString(message);
+            string[] messageFields = Explode(stringMessage, DELIMITER);
+            if (Code == 1) // CONNECT
             {
-                messageCode += messageString[i];
-                ++i;
+                Code = int.Parse(messageFields[0]);
+                Ip = messageFields[1];
+                Username = messageFields[2];
             }
-            Code = Int32.Parse(messageCode);
-            Code -= Int32.Parse("0"); 
-
-            ++i;
-            if (Code == 1)
+            else
             {
-                Ip = "";
-                while (messageString[i] != DELIMITER)
-                {
-                    Ip += messageString[i];
-                    ++i;
-                }
-                ++i; // Переходим на первый символ имени
-                Username = messageString.Substring(i);
-            }
-            else if (Code > 1)
-            {
-                Username = "";
-                while (messageString[i] != DELIMITER)
-                {
-                    Username += messageString[i];
-                    ++i;
-                }
-                ++i; // Переходим на первый символ сообщения
-                MessageText = messageString.Substring(i);
-            }
+                Code = int.Parse(messageFields[0]);
+                MessageText = messageFields[1];
+            }    
         }
 
         public byte[] ToBytes()
         {
-            if (Code == 1)
+            if (Code == 1) // CONNECT
             {
                 return Encoding.Unicode.GetBytes(Code.ToString() + DELIMITER + Ip + DELIMITER + Username);
             }
             else
             {
-                return Encoding.Unicode.GetBytes(Code.ToString() + DELIMITER + Username + DELIMITER + MessageText);
+                return Encoding.Unicode.GetBytes(Code.ToString() + DELIMITER + MessageText);
             }
         }
     }

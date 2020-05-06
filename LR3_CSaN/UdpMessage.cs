@@ -1,10 +1,11 @@
-﻿using System.Text;
+﻿using System;
+using System.Text;
 
 namespace LR3_CSaN
 {
     class UdpMessage
     {
-        const char DELIMITER = '>';
+        const string DELIMITER = ">";
         public string Ip { get; set; }
         public string Username { get; set; }
 
@@ -24,19 +25,17 @@ namespace LR3_CSaN
             return Encoding.Unicode.GetBytes(Ip + DELIMITER + Username);
         }
 
+        private string[] Explode(string message, string delimiter)
+        {
+            return message.Split(new string[] { delimiter }, StringSplitOptions.None);
+        }
+
         private void ParseMessageFromBytes(byte[] message)
         {
-            string messageString = Encoding.Unicode.GetString(message);
-
-            Ip = "";
-            int i = 0;
-            while (messageString[i] != DELIMITER)
-            {
-                Ip += messageString[i];
-                ++i;
-            }
-            ++i; // Переходим на первый символ имени
-            Username = messageString.Substring(i);
+            string stringMessage = Encoding.Unicode.GetString(message);
+            string[] messageFields = Explode(stringMessage, DELIMITER);
+            Ip = messageFields[0];
+            Username = messageFields[1];
         }
     }
 }

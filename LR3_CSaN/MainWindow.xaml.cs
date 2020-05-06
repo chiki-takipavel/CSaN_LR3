@@ -2,11 +2,9 @@
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Xml.Serialization;
 
 namespace LR3_CSaN
 {
@@ -16,18 +14,18 @@ namespace LR3_CSaN
     public partial class MainWindow : Window
     {
         private readonly SynchronizationContext context;
-        private UdpClient udpReceiver;
-        private bool aliveUdpTask;
-        private bool aliveTcpTask;
+        private volatile bool aliveUdpTask;
+        private volatile bool aliveTcpTask;
         private const int CONNECT = 1;
         private const int MESSAGE = 2;
-        private const int EXIT = 3;
+        private const int EXIT_USER = 3;
         private const int SEND_HISTORY = 4;
         private const int SHOW_HISTORY = 5;
+        private object synlock = new object();
 
         public string Username { get; set; }
         public string IpAddress { get; set; }
-        public Dictionary<string, IPEndPoint> ChatUsers { get; set; }
+        public List<ChatUser> ChatUsers { get; set; }
         public string History { get; set; }
 
         /// <summary>
@@ -37,11 +35,11 @@ namespace LR3_CSaN
         {
             InitializeComponent();
             context = SynchronizationContext.Current;
-            ChatUsers = new Dictionary<string, IPEndPoint>();
+            ChatUsers = new List<ChatUser>();
             tbMessage.IsEnabled = false;
         }
 
-        #region Получение IP-адреса пользователя и Broadcast
+        #region Получение IP-адреса пользователя и Broadcast адреса
         /// <summary>
         /// Получение локального IP-адреса пользователя
         /// </summary>
@@ -87,7 +85,6 @@ namespace LR3_CSaN
                 UdpMessage udpMessage = new UdpMessage(IpAddress, Username);
                 byte[] messageBytes = udpMessage.ToBytes();
                 udpSender.Send(messageBytes, messageBytes.Length, destEndPoint);
-                udpSender.Close();
                 udpSender.Dispose();
 
                 string messageChat = "Вы успешно подключились!\r\n";
@@ -106,46 +103,46 @@ namespace LR3_CSaN
         /// </summary>
         private void ListenUdpMessages()
         {
+            const int REMOTE_UDP_PORT = 8501;
             const int LOCAL_UDP_PORT = 8502;
-            const int REMOTE_TCP_PORT = 8503;
+            const int TCP_PORT = 8503;
 
             aliveUdpTask = true;
 
             IPEndPoint localEndPoint = new IPEndPoint(IPAddress.Parse(IpAddress), LOCAL_UDP_PORT);
-            udpReceiver = new UdpClient(localEndPoint);
+            UdpClient udpReceiver = new UdpClient(localEndPoint);
             while (aliveUdpTask)
             {
                 try
                 {
-                    IPEndPoint remoteEndPoint = null;
+                    IPEndPoint remoteEndPoint = new IPEndPoint(IPAddress.Any, REMOTE_UDP_PORT);
                     byte[] message = udpReceiver.Receive(ref remoteEndPoint);
-
                     UdpMessage receiveMessage = new UdpMessage(message);
+
+                    // Устанавливаем подключение с новым пользователем
+                    ChatUser newUser = new ChatUser(receiveMessage.Username, receiveMessage.Ip, TCP_PORT);
+                    newUser.Connect();
+
+                    // Отправляем новому пользователю своё имя
+                    TcpMessage tcpMessage = new TcpMessage(CONNECT, IpAddress, Username);
+                    newUser.SendMessage(tcpMessage);
+                    ChatUsers.Add(newUser);
+
+                    Task.Factory.StartNew(() => ListenUser(newUser));
+
                     context.Post(delegate (object state)
                     {
                         string datetime = DateTime.Now.ToString();
-                        string messageChat = string.Format("{0} {1} присоединился к чату\r\n", datetime, receiveMessage.Username);
+                        string messageChat = string.Format("{0} {1} присоединился к чату\r\n", datetime, newUser.Username);
                         tbChat.AppendText(messageChat);
                     }, null);
-
-                    Socket tcpSenderSocket;
-                    // Устанавливаем подключение с новым пользователем
-                    IPEndPoint connectionEndPoint = new IPEndPoint(IPAddress.Parse(receiveMessage.Ip), REMOTE_TCP_PORT);
-                    tcpSenderSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-                    ChatUsers.Add(receiveMessage.Username, connectionEndPoint);
-                    tcpSenderSocket.Connect(connectionEndPoint);
-
-                    // Отправляем новому пользователю своё имя
-                    TcpMessage tcpMessage = new TcpMessage(IpAddress, Username);
-                    tcpSenderSocket.Send(tcpMessage.ToBytes());
-                    tcpSenderSocket.Shutdown(SocketShutdown.Both);
-                    tcpSenderSocket.Close();
                 }
                 catch (Exception ex)
                 {
                     throw ex;
                 }
             }
+            udpReceiver.Dispose();
         }
         #endregion
 
@@ -156,90 +153,22 @@ namespace LR3_CSaN
         private void ListenTcpMessages()
         {
             const int TCP_PORT = 8503;
+
             aliveTcpTask = true;
-            bool firstUser = true;
 
             try
             {
-                IPEndPoint localEndPoint = new IPEndPoint(IPAddress.Parse(IpAddress), TCP_PORT);
-                Socket tcpListenerSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-                tcpListenerSocket.Bind(localEndPoint);
-                tcpListenerSocket.Listen(10);
-
+                TcpListener tcpListener = new TcpListener(IPAddress.Parse(IpAddress), TCP_PORT);
+                tcpListener.Start();
                 while (aliveTcpTask)
                 {
-                    Socket listener = tcpListenerSocket.Accept();
-                    StringBuilder data = new StringBuilder();
-                    int size = 0;
-                    byte[] buffer = new byte[256];
-
-                    do
+                    if (tcpListener.Pending())
                     {
-                        size = listener.Receive(buffer);
-                        data.Append(Encoding.Unicode.GetString(buffer, 0, size));
-                    }
-                    while (listener.Available > 0);
-
-                    try
-                    {
-                        TcpMessage tcpMessage = new TcpMessage(Encoding.Unicode.GetBytes(data.ToString()));
-                        switch (tcpMessage.Code)
-                        {
-                            case CONNECT:
-                                IPEndPoint remoteEndPoint = new IPEndPoint(IPAddress.Parse(tcpMessage.Ip), TCP_PORT);
-                                ChatUsers.Add(tcpMessage.Username, remoteEndPoint);
-                                if (firstUser)
-                                {
-                                    try
-                                    {
-                                        TcpMessage tcpHistoryMessage = new TcpMessage(4, Username, "History");
-                                        listener.Send(tcpHistoryMessage.ToBytes());
-                                    }
-                                    catch
-                                    {
-                                        context.Post(delegate (object state)
-                                        {
-                                            tbChat.AppendText("История пуста.\r\n");
-                                        }, null);
-                                    }
-                                    finally
-                                    {
-                                        firstUser = false;
-                                    }
-                                }
-                                break;
-                            case MESSAGE:
-                                ShowMessage(tcpMessage);
-                                break;
-                            case EXIT:
-                                ShowUserExit(tcpMessage);
-                                break;
-                            case SEND_HISTORY:
-                                try
-                                {
-                                    Socket tcpHistorySocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-                                    tcpHistorySocket.Connect(ChatUsers[tcpMessage.Username]);
-                                    TcpMessage tcpHistoryMessage = new TcpMessage(5, Username, History);
-                                    tcpHistorySocket.Send(tcpHistoryMessage.ToBytes());
-                                    tcpHistorySocket.Shutdown(SocketShutdown.Both);
-                                    tcpHistorySocket.Close();
-                                }
-                                catch { }
-                                break;
-                            case SHOW_HISTORY:
-                                ShowHistory(tcpMessage);
-                                break;
-                            default:
-                                break;
-                        }
-                        listener.Shutdown(SocketShutdown.Both);
-                        listener.Close();
-                    }
-                    catch (Exception ex)
-                    {
-                        throw ex;
+                        ChatUser newUser = new ChatUser(tcpListener.AcceptTcpClient(), TCP_PORT);
+                        Task.Factory.StartNew(() => ListenUser(newUser));
                     }
                 }
+                tcpListener.Stop();
             }
             catch (Exception ex)
             {
@@ -247,9 +176,59 @@ namespace LR3_CSaN
             }
         }
 
-        private void ListenUser()
+        /// <summary>
+        /// Прослушивание пользователя чата
+        /// </summary>
+        /// <param name="user">Пользователь чата</param>
+        private void ListenUser(ChatUser user)
         {
-            const int TCP_PORT = 8503;
+            bool firstUser = true;
+
+            while (user.IsOnline)
+            {
+                try
+                {
+                    if (user.Stream.DataAvailable)
+                    {
+                        byte[] message = user.RecieveMessage();
+                        TcpMessage tcpMessage = new TcpMessage(message);
+                        int code = tcpMessage.Code;
+                        switch (code)
+                        {
+                            case CONNECT:
+                                user.Ip = tcpMessage.Ip;
+                                user.Username = tcpMessage.Username;
+                                ChatUsers.Add(user);
+                                if (firstUser)
+                                {
+                                    GetHistory(SEND_HISTORY, user);
+                                    firstUser = false;
+                                }
+                                break;
+                            case MESSAGE:
+                                ShowInChat(code, user.Username, tcpMessage.MessageText);
+                                break;
+                            case EXIT_USER:
+                                user.Dispose();
+                                ChatUsers.Remove(user);
+                                ShowInChat(code, user.Username, tcpMessage.MessageText);
+                                break;
+                            case SEND_HISTORY:
+                                GetHistory(SHOW_HISTORY, user);
+                                break;
+                            case SHOW_HISTORY:
+                                ShowInChat(code, user.Username, tcpMessage.MessageText);
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    throw ex;
+                }
+            }
         }
 
         /// <summary>
@@ -258,88 +237,73 @@ namespace LR3_CSaN
         private void SendTcpMessage()
         {
             string userMessage = tbMessage.Text;
-            TcpMessage tcpMessage = new TcpMessage(2, Username, userMessage);
-            string datetime = DateTime.Now.ToString();
-            string messageChat = string.Format("{0} Вы: {1}\r\n", datetime, userMessage);
-            if (ChatUsers != null)
+            TcpMessage tcpMessage = new TcpMessage(MESSAGE, userMessage);
+            foreach (ChatUser user in ChatUsers)
             {
-                foreach (string username in ChatUsers.Keys)
+                try
                 {
-                    try
-                    {
-                        Socket tcpSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-                        tcpSocket.Connect(ChatUsers[username]);
-                        tcpSocket.Send(tcpMessage.ToBytes());
-                        tcpSocket.Shutdown(SocketShutdown.Both);
-                        tcpSocket.Close();
-                    }
-                    catch
-                    {
-                        MessageBox.Show(string.Format("Не удалось отправить сообщение пользователю {0}.", username));
-                    }
+                    user.SendMessage(tcpMessage);
+                }
+                catch
+                {
+                    MessageBox.Show(string.Format("Не удалось отправить сообщение пользователю {0}.", user.Username));
                 }
             }
+
+            string datetime = DateTime.Now.ToString();
+            string messageChat = string.Format("{0} Вы: {1}\r\n", datetime, userMessage);
             tbChat.AppendText(messageChat);
             tbMessage.Clear();
             History += string.Format("{0} {1}: {2}\r\n", datetime, Username, userMessage);
         }
         #endregion
 
-        #region Методы вывода различных сообщений
+        #region Вывод принятой информации в чат пользователя
         /// <summary>
-        /// Вывод принятого сообщения
+        /// Вывод информации в чат (сообщения пользователей, сообщения о выходе из чата,
+        /// история пользователя из чата)
         /// </summary>
-        /// <param name="message">TCP-сообщение</param>
-        private void ShowMessage(TcpMessage message)
+        /// <param name="code">Код сообщения</param>
+        /// <param name="username">Имя пользователя, от кого пришло сообщение</param>
+        /// <param name="message">Текст принятого сообщения</param>
+        private void ShowInChat(int code, string username, string message)
         {
-            if (ChatUsers != null)
+            string datetime = DateTime.Now.ToString();
+            switch (code)
             {
-                context.Post(delegate (object state)
-                {
-                    string datetime = DateTime.Now.ToString();
-                    string messageChat = string.Format("{0} {1}: {2}\r\n", datetime, message.Username, message.MessageText);
-                    History += messageChat;
-                    tbChat.AppendText(messageChat);
-                }, null);
-            }
-        }
-
-        /// <summary>
-        /// Вывод сообщения о выходе пользователя из чата
-        /// </summary>
-        /// <param name="message">TCP-сообщение</param>
-        private void ShowUserExit(TcpMessage message)
-        {
-            if (ChatUsers != null)
-            {
-                ChatUsers.Remove(message.Username);
-                context.Post(delegate (object state)
-                {
-                    string datetime = DateTime.Now.ToString();
-                    string messageChat = string.Format("{0} {1}\r\n", datetime, message.MessageText);
-                    History += messageChat;
-                    tbChat.AppendText(messageChat);
-                }, null);
-            }
-        }
-
-        /// <summary>
-        /// Вывод истории
-        /// </summary>
-        /// <param name="message">TCP-сообщение</param>
-        private void ShowHistory(TcpMessage message)
-        {
-            if (message.MessageText != "")
-            {
-                context.Post(delegate (object state)
-                {
-                    History = message.MessageText + History;
-                    tbChat.Text = message.MessageText + tbChat.Text;
-                }, null);
+                case MESSAGE:
+                    context.Post(delegate (object state)
+                    {
+                        string messageChat = string.Format("{0} {1}: {2}\r\n", datetime, username, message);
+                        History += messageChat;
+                        tbChat.AppendText(messageChat);
+                    }, null);
+                    break;
+                case EXIT_USER:
+                    context.Post(delegate (object state)
+                    {
+                        string messageChat = string.Format("{0} {1}\r\n", datetime, message);
+                        History += messageChat;
+                        tbChat.AppendText(messageChat);
+                    }, null);
+                    break;
+                case SHOW_HISTORY:
+                    if (message != "")
+                    {
+                        context.Post(delegate (object state)
+                        {
+                            History = message + History;
+                            tbChat.Text = message + tbChat.Text;
+                        }, null);
+                    }
+                    break;
+                default:
+                    break;
             }
         }
         #endregion
 
+        #region Обработка событий формы
         /// <summary>
         /// Нажтие на кнопку "Подключиться"
         /// </summary>
@@ -379,48 +343,6 @@ namespace LR3_CSaN
         }
 
         /// <summary>
-        /// Выход из чата
-        /// </summary>
-        private void ExitChat()
-        {
-            aliveUdpTask = false;
-            aliveTcpTask = false;
-
-            if (udpReceiver != null)
-            {
-                udpReceiver.Close();
-                udpReceiver.Dispose();
-            }
-
-            if (ChatUsers != null)
-            {
-                foreach (string username in ChatUsers.Keys)
-                {
-                    try
-                    {
-                        Socket tcpSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-                        tcpSocket.Connect(ChatUsers[username]);
-                        string datetime = DateTime.Now.ToString();
-                        string message = string.Format("{0} покинул чат", Username);
-                        string exit = string.Format("{0} {1}\r\n", datetime, message);
-
-                        TcpMessage tcpMessage = new TcpMessage(3, Username, message);
-                        History += exit;
-                        tbChat.AppendText(exit);
-
-                        tcpSocket.Send(tcpMessage.ToBytes());
-                        tcpSocket.Shutdown(SocketShutdown.Both);
-                        tcpSocket.Close();
-                    }
-                    catch
-                    {
-                        MessageBox.Show("Ошибка отправки уведомления о выходе из чата.");
-                    }
-                }
-            }
-        }
-
-        /// <summary>
         /// Закрытие окна
         /// </summary>
         private void MainWindow_Closing(object sender, System.ComponentModel.CancelEventArgs e)
@@ -428,5 +350,63 @@ namespace LR3_CSaN
             if (aliveUdpTask && aliveTcpTask)
                 ExitChat();
         }
+        #endregion
+
+        #region Дополнительные методы (выход из чата, запрос истории)
+        /// <summary>
+        /// Запрос истории
+        /// </summary>
+        /// <param name="code">Код, отвечающий за запрос истории или её отправку</param>
+        /// <param name="user">Пользователь в чате, который отправляет или получает историю</param>
+        private void GetHistory(int code, ChatUser user)
+        {
+            try
+            {
+                TcpMessage tcpHistoryMessage;
+                if (code == SEND_HISTORY)
+                {
+                    tcpHistoryMessage = new TcpMessage(code, "History");
+                }
+                else // SHOW_HISTORY
+                {
+                    tcpHistoryMessage = new TcpMessage(code, History);
+                }
+                user.SendMessage(tcpHistoryMessage);
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// Выход из чата
+        /// </summary>
+        private void ExitChat()
+        {
+            aliveUdpTask = false;
+            aliveTcpTask = false;
+
+            string datetime = DateTime.Now.ToString();
+            string message = string.Format("{0} покинул чат", Username);
+            string exit = string.Format("{0} {1}\r\n", datetime, message);
+            tbChat.AppendText(exit);
+
+            lock (synlock)
+            {
+                TcpMessage tcpMessage = new TcpMessage(EXIT_USER, message);
+                foreach (ChatUser user in ChatUsers)
+                {
+                    try
+                    {
+                        user.SendMessage(tcpMessage);
+                        user.Dispose();
+                    }
+                    catch
+                    {
+                        MessageBox.Show("Ошибка отправки уведомления о выходе из чата.");
+                    }
+                }
+                ChatUsers.Clear();
+            }
+        }
+        #endregion
     }
 }
