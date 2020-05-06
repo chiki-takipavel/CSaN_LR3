@@ -38,17 +38,16 @@ namespace LR3_CSaN
         {
             string stringMessage = Encoding.Unicode.GetString(message);
             string[] messageFields = Explode(stringMessage, DELIMITER);
+            Code = int.Parse(messageFields[0]);
             if (Code == 1) // CONNECT
             {
-                Code = int.Parse(messageFields[0]);
                 Ip = messageFields[1];
                 Username = messageFields[2];
             }
             else
             {
-                Code = int.Parse(messageFields[0]);
                 MessageText = messageFields[1];
-            }    
+            }
         }
 
         public byte[] ToBytes()

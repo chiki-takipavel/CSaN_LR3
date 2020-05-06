@@ -24,8 +24,8 @@ namespace LR3_CSaN
 
         public ChatUser(string username, string ip, int port)
         {
-            Ip = ip;
             Username = username;
+            Ip = ip;
             Port = port;
         }
 
